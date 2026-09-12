@@ -79,6 +79,22 @@ def _normalize_retain_tags(value: Any) -> List[str]:
     return normalized
 
 
+def _normalize_read_bank_ids(value: Any, primary_bank_id: str) -> List[str]:
+    """Normalize explicit read-only bank IDs and exclude the primary bank."""
+    normalized: list[str] = []
+    seen = {primary_bank_id}
+    for item in _normalize_retain_tags(value):
+        bank_id = str(item).strip()
+        if bank_id != _sanitize_bank_segment(bank_id):
+            logger.warning("Ignoring invalid Hindsight read bank id: %r", bank_id)
+            continue
+        if bank_id in seen:
+            continue
+        seen.add(bank_id)
+        normalized.append(bank_id)
+    return normalized
+
+
 def _normalize_observation_scopes(value: Any) -> Any:
     """Normalize observation_scopes to a keyword string, ``list[list[str]]`` (one inner
     list per consolidation pass), or ``None`` (Hindsight's ``combined`` default).

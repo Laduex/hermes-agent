@@ -28,6 +28,14 @@ CONFIG_SCHEMA = ProviderConfigSchema(
         ),
         ProviderField(key="bank_id", label="Bank ID", kind=KIND_TEXT, default="hermes", aliases=("bankId",), inline=True),
         ProviderField(
+            key="read_bank_ids", label="Additional read-only banks", kind=KIND_TEXT,
+            description=(
+                "Comma-separated bank IDs available to explicit recall and reflect. "
+                "Automatic recall and writes stay in the primary bank."
+            ),
+            placeholder="bank-a, bank-b", inline=True,
+        ),
+        ProviderField(
             key="recall_budget", label="Recall budget", kind=KIND_SELECT, default="mid", aliases=("budget",),
             options=tuple(ProviderFieldOption(b, b) for b in ("low", "mid", "high")),
             inline=True,

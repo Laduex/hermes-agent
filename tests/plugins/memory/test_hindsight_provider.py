@@ -30,6 +30,7 @@ from plugins.memory.hindsight import (
     _load_simple_env,
     _build_embedded_profile_env,
     _normalize_observation_scopes,
+    _normalize_read_bank_ids,
     _normalize_retain_tags,
     _resolve_bank_id_template,
     _WRITER_SENTINEL,
@@ -224,6 +225,12 @@ def test_normalize_retain_tags_accepts_csv_and_dedupes():
     ]
 
 
+def test_normalize_read_bank_ids_excludes_primary_and_rejects_unsafe_ids():
+    assert _normalize_read_bank_ids(
+        "test-bank, shared_bank, shared_bank, unsafe bank", "test-bank"
+    ) == ["shared_bank"]
+
+
 # ---------------------------------------------------------------------------
 # Schema tests
 # ---------------------------------------------------------------------------
@@ -303,6 +310,7 @@ class TestConfig:
             recall_prompt_preamble="Custom preamble:",
             recall_max_input_chars=500,
             bank_mission="Test agent mission",
+            read_bank_ids=["shared-bank", "test-bank"],
         )
         assert p._tags == ["tag1", "tag2"]
         assert p._retain_tags == ["tag1", "tag2"]
@@ -321,6 +329,7 @@ class TestConfig:
         assert p._recall_prompt_preamble == "Custom preamble:"
         assert p._recall_max_input_chars == 500
         assert p._bank_mission == "Test agent mission"
+        assert p._read_bank_ids == ["shared-bank"]
 
     def test_retain_source_defaults_empty(self, provider):
         # Opt-in per AGENTS.md: no attribution tag ships by default.
@@ -511,11 +520,50 @@ class TestToolHandlers:
         assert "Memory 2" in result["result"]
 
 
+    def test_explicit_recall_reads_allowlisted_banks_but_auto_recall_stays_primary(
+        self, provider_with_config,
+    ):
+        p = provider_with_config(read_bank_ids=["shared-bank"])
+        p._client.arecall = AsyncMock(side_effect=[
+            SimpleNamespace(results=[SimpleNamespace(text="Primary"), SimpleNamespace(text="Shared")]),
+            SimpleNamespace(results=[SimpleNamespace(text="Shared"), SimpleNamespace(text="Other")]),
+        ])
+
+        result = json.loads(p.handle_tool_call("hindsight_recall", {"query": "memory"}))
+        assert "[test-bank] Primary" in result["result"]
+        assert "[test-bank, shared-bank] Shared" in result["result"]
+        assert "[shared-bank] Other" in result["result"]
+        assert [call.kwargs["bank_id"] for call in p._client.arecall.await_args_list] == [
+            "test-bank", "shared-bank",
+        ]
+
+        p._client.arecall.reset_mock()
+        p._client.arecall.side_effect = None
+        p._client.arecall.return_value = SimpleNamespace(results=[])
+        p._recall("automatic query")
+        p._client.arecall.assert_awaited_once()
+        assert p._client.arecall.await_args.kwargs["bank_id"] == "test-bank"
+
+
     def test_reflect_success(self, provider):
         result = json.loads(provider.handle_tool_call(
             "hindsight_reflect", {"query": "summarize"}
         ))
         assert result["result"] == "Synthesized answer"
+
+
+    def test_explicit_reflect_labels_allowlisted_banks(self, provider_with_config):
+        p = provider_with_config(read_bank_ids=["shared-bank"])
+        p._client.areflect = AsyncMock(side_effect=[
+            SimpleNamespace(text="Primary reflection"),
+            SimpleNamespace(text="Shared reflection"),
+        ])
+
+        result = json.loads(p.handle_tool_call("hindsight_reflect", {"query": "memory"}))
+        assert result["result"] == (
+            "## test-bank\nPrimary reflection\n\n"
+            "## shared-bank\nShared reflection"
+        )
 
 
     def test_unknown_tool(self, provider):
