@@ -23,6 +23,6 @@ ARG DECISION_INBOX_VERSION=0.3.4
 
 RUN /opt/hermes/.venv/bin/python -c "import hermes_decision_inbox; assert hermes_decision_inbox.__version__ == '${DECISION_INBOX_VERSION}'"
 
-LABEL org.opencontainers.image.source="https://github.com/Laduex/hermes-agent" \\
-      com.laduex.hermes.revision="${HERMES_GIT_SHA}" \\
+LABEL org.opencontainers.image.source="https://github.com/Laduex/hermes-agent" \
+      com.laduex.hermes.revision="${HERMES_GIT_SHA}" \
       com.laduex.hermes.decision-inbox-version="${DECISION_INBOX_VERSION}"
