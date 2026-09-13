@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+#
+# Assemble the Hostinger runtime image from a freshly-built Hermes core while
+# preserving the separately released Decision Inbox plugin already present in
+# the last known-good runtime image. The plugin is intentionally not copied
+# from the dirty VPS checkout.
+
+ARG CORE_IMAGE
+ARG RUNTIME_IMAGE
+
+FROM ${RUNTIME_IMAGE} AS decision_inbox_source
+
+FROM ${CORE_IMAGE}
+
+USER root
+
+COPY --from=decision_inbox_source /opt/hermes/.venv/bin/decision-inbox /opt/hermes/.venv/bin/decision-inbox
+COPY --from=decision_inbox_source /opt/hermes/.venv/lib/python3.13/site-packages/hermes_decision_inbox /opt/hermes/.venv/lib/python3.13/site-packages/hermes_decision_inbox
+COPY --from=decision_inbox_source /opt/hermes/.venv/lib/python3.13/site-packages/hermes_decision_inbox-0.3.4.dist-info /opt/hermes/.venv/lib/python3.13/site-packages/hermes_decision_inbox-0.3.4.dist-info
+
+ARG HERMES_GIT_SHA
+ARG DECISION_INBOX_VERSION=0.3.4
+
+RUN /opt/hermes/.venv/bin/python -c "import hermes_decision_inbox; assert hermes_decision_inbox.__version__ == '${DECISION_INBOX_VERSION}'"
+
+LABEL org.opencontainers.image.source="https://github.com/Laduex/hermes-agent" \\
+      com.laduex.hermes.revision="${HERMES_GIT_SHA}" \\
+      com.laduex.hermes.decision-inbox-version="${DECISION_INBOX_VERSION}"
